@@ -1,0 +1,258 @@
+---
+title: "Geography 176A"
+author: "[Zhongchang Yao](https://github.com/ZhongchangYao)"
+subtitle: 'Lab 4 Tesselations, Point-in-Polygon'
+output:
+  html_document:
+    theme: journal
+---
+
+```{R}
+library(tidyverse)
+library(sf)
+library(units)
+
+library(USAboundaries)
+library(rnaturalearth)
+
+library(gghighlight)
+library(ggrepel)
+library(knitr)
+library(readr)
+library(readxl)
+```
+
+
+```{R}
+#Question1
+#1.1
+conus = USAboundaries::us_counties(resolution = "low") %>%
+  st_as_sf()%>%
+  filter(!state_abbr %in% c("PR","AK","HI"))%>%
+  st_transform(5070)
+
+#1.2
+cen_conus = st_centroid(conus)
+
+cen_conus = st_union(cen_conus)%>%
+  st_cast("MULTILINESTRING")
+
+
+#1.3
+sq_grid = st_make_grid(cen_conus, n = 70) %>% 
+  st_as_sf() %>% 
+  mutate(id = 1:n())
+
+hex_grid = st_make_grid(cen_conus, n = 70, square = FALSE) %>% 
+  st_as_sf() %>% 
+  mutate(id = 1:n())
+
+v_grid = st_voronoi(cen_conus) %>% 
+  st_cast() %>% 
+  st_as_sf() %>% 
+  mutate(id = 1:n())
+
+t_grid = st_triangulate(cen_conus) %>% 
+  st_cast() %>% 
+  st_as_sf() %>% 
+  mutate(id = 1:n())
+
+#1.4
+
+u_conus = st_union(conus)
+
+#1.5
+u_conus = rmapshaper::ms_simplify(u_conus)
+t_grid = st_intersection(t_grid, u_conus)
+
+
+#1.6
+plot_tess = function(data, title){
+  ggplot() + 
+    geom_sf(data = data, fill = "white", col = "navy", size = .2) +   
+    theme_void() +
+    labs(title = title, caption = paste("This tesselation has:", nrow(data), "tiles" )) +
+    theme(plot.title = element_text(hjust = .5, color =  "navy", face = "bold"))
+}
+
+#1.7
+sq_plot = plot_tess(sq_grid, "Square Coverage")
+hex_plot = plot_tess(hex_grid, "Hexegonal Coverage")
+v_plot = plot_tess(v_grid, "Voronoi Coverage")
+t_plot = plot_tess(t_grid, "Voroni Coverage")
+coun_plot = plot_tess(conus, "US Counties")
+```
+
+
+```{R}
+#Question 2
+
+#2.1
+
+sf_data = function(sf_object, char){
+  area = st_area(sf_object)%>%
+    set_units('km^2')%>%
+    drop_units()
+  area_da = data.frame(tesselation = char,
+                    feature = max(sf_object$id),
+                    mean = (area)/(sf_object$id),
+                    std = sd(area),
+                    total = sum(area))
+  return(area_da)
+}
+
+
+#2.2
+
+conus = conus%>%
+mutate(id = 1:n())
+
+sq_data = sf_data(sq_grid, "square tesselation")
+hex_data = sf_data(hex_grid, "hexagonal tesselation")
+v_data = sf_data(v_grid, "voroni tesselation")
+t_data = sf_data(t_grid, "triangulation tesselation")
+coun_data = sf_data(conus, "county")
+
+#2.3
+tess_summary = bind_rows(
+  sf_data(t_grid ,"triangulation"),
+  sf_data(v_grid, "voroni"),
+  sf_data(sq_grid ,"square"),
+  sf_data(hex_grid, "hexagonal"),
+  sf_data(conus ,"county")
+)
+
+#2.4
+
+knitr::kable(tess_summary, caption = "US County", col.names = c("tesselation","features","mean","standard deviation","total area"))
+
+
+#2.5
+"Square and Hexigonal will roughly keep the original seperation, and the point analysis will be similar to the cases of raw map. The triangulation and Voroni will zoom the data maps to show the different areas variously. That will be more fit for the analysis I think."
+
+```
+
+
+#Question3
+```{R}
+#3.1
+dam = read_excel("../data/NID2019_U.xlsx")
+
+dam_sf = dam%>%
+  filter(!is.na(LONGITUDE),!is.na(LATITUDE))%>%
+  st_as_sf(coords = c("LONGITUDE","LATITUDE"),crs=4326)%>%
+  st_transform(5070)
+
+
+#3.2
+pip_function=function(points,polygon, group){
+  st_join(polygon, points)%>%
+    st_drop_geometry()%>%
+    count(get(group))%>%
+    setNames(c(group, "n"))%>%
+    left_join(polygon, by = group)%>%
+    st_as_sf()
+}
+
+#3.3
+dam_tri = pip_function(dam_sf, t_grid, "id")
+dam_sq = pip_function(dam_sf, sq_grid, "id")
+dam_voroni = pip_function(dam_sf, v_grid, "id")
+dam_hex = pip_function(dam_sf, hex_grid, "id")
+dam_coun = pip_function(dam_sf, conus, "id")
+
+#3.4
+
+plot_dam = function(sf_data, char){
+  ggplot()+
+    geom_sf(data = sf_data, aes(fill=n),alpha=1,size=0.1)+
+    viridis::scale_fill_viridis()+
+    theme_void()+
+    theme(plot.caption = element_text(size = 10))+
+    labs(title = char,
+         caption=paste0(sum(sf_data$n),"dam"))
+}
+
+
+#3.5
+damplot_tri = plot_dam(dam_tri, "Dams in US with triangulation tessellation")
+damplot_sq = plot_dam(dam_sq, "Dams in US with square tessellation")
+damplot_v = plot_dam(dam_voroni, "Dams in US with voroni tessellation")
+damplot_hex = plot_dam(dam_hex, "Dams in US with hexagonal tessellation")
+damplot_coun = plot_dam(dam_coun, "Dams in US with county borders")
+
+plot(damplot_tri)
+plot(damplot_sq)
+plot(damplot_v)
+plot(damplot_hex)
+plot(damplot_coun)
+
+
+#3.6
+#From the graph I made above, the triangulation seems to provide more visible and expected result. It can reflect the conditions around the country.
+
+```
+
+
+#Question4
+```{R}
+#4
+nid_classifier = data.frame(abbr = c('I','H','C','N','S','R','P','F','D','T','G','O'),
+                            purpose = c('Irrigation','Hydroelectric','Flood Control','Navigation','Water Supply','Recreation','Fire Protection','Fish and Wildlife','Debris Control','Tailings','Grade Stabilization','Other'))
+
+# create a vector of all characters in your purpose and unlist 
+dam_freq <- strsplit(dam$PURPOSES, split = "") %>%
+  unlist() %>% 
+  table() %>% 
+  as.data.frame() %>% 
+  setNames(c("abbr", "count")) %>% 
+  left_join(nid_classifier) %>% 
+  mutate(lab = paste0(purpose, "\n(", abbr, ")"))
+
+
+#4.1
+re_dam = pip_function(dam_sf[grepl("R", dam_sf$PURPOSES),], t_grid, 'id')
+flood_dam = pip_function(dam_sf[grepl("C", dam_sf$PURPOSES),], t_grid, 'id')
+fire_dam = pip_function(dam_sf[grepl("P", dam_sf$PURPOSES),], t_grid, 'id')
+water_dam = pip_function(dam_sf[grepl("S", dam_sf$PURPOSES),], t_grid, 'id')
+
+#I choose the top four purposes of the dams(except the "Other". These may be more representative.
+
+
+#4.2
+
+plot_dam_part = function(sf_data, char){
+  ggplot()+
+    geom_sf(data = sf_data, aes(fill=n),alpha=1,size=0.1)+
+    gghighlight(n>mean(n)+sd(n))+
+    viridis::scale_fill_viridis()+
+    theme_void()+
+    theme(plot.caption = element_text(size = 10))+
+    labs(title = char,
+         caption=paste0(sum(sf_data$n),"dam"))
+}
+
+
+re_dam_plot = plot_dam_part(re_dam, "Recreational dam")
+flood_dam_plot = plot_dam_part(flood_dam, "Flood control dam")
+fire_dam_plot = plot_dam_part(fire_dam, "Fire protection dam")
+water_dam_plot = plot_dam_part(water_dam, "Water supply dam")
+
+plot(re_dam_plot)
+plot(flood_dam_plot)
+plot(fire_dam_plot)
+plot(water_dam_plot)
+
+
+
+#4.3
+
+#Most of the Recreation Dams are near the coastal area, which are influenced by sea level rise and extreme weather condition. THese dams are used to manipulate the amount of water there.
+#The flood control dams are surrounding the Mississippi River because the river often induces the flood situations.
+#The FIre Protection dams are mostly located in middle areas. THese areas are relatively drier than other locations. There should be always enough water to reflect to extremely hot climate.
+#The water supply dams are for huge cities, so in the map, the dams are surrounding the large cities at east and west coasts. THere are also plenty of dams around the middle area and southern areas.
+```
+
+
+
+
