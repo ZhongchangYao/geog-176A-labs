@@ -395,7 +395,6 @@ library(units)
 library(knitr)</code></pre>
 <p>#Question1</p>
 <pre class="r"><code>basin  = read_sf(&quot;https://labs.waterdata.usgs.gov/api/nldi/linked-data/nwissite/USGS-11119750/basin/&quot;)
-write_sf(basin, dsn = &quot;../data/USGS-11119750.gpkg&quot;)
 elev  = elevatr::get_elev_raster(basin, z = 13, units = &quot;feet&quot;) %&gt;% crop(basin) %&gt;%mask(basin)
 writeRaster(elev, &quot;../data/basin-elev.tif&quot;, overwrite = TRUE)
 elev_raster = raster(&quot;../data/basin-elev.tif&quot;)</code></pre>

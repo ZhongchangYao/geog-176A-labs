@@ -28,7 +28,6 @@ library(knitr)
 ```{R,message=FALSE,warning=FALSE}
 
 basin  = read_sf("https://labs.waterdata.usgs.gov/api/nldi/linked-data/nwissite/USGS-11119750/basin/")
-write_sf(basin, dsn = "../data/USGS-11119750.gpkg")
 elev  = elevatr::get_elev_raster(basin, z = 13, units = "feet") %>% crop(basin) %>%mask(basin)
 writeRaster(elev, "../data/basin-elev.tif", overwrite = TRUE)
 elev_raster = raster("../data/basin-elev.tif")
@@ -36,8 +35,7 @@ elev_raster = raster("../data/basin-elev.tif")
 
 ```{R,message=FALSE,warning=FALSE,echo = FALSE}
 bb_basin = st_bbox(basin) %>%
-  st_as_sfc() %>%
-  st_transform(4326)
+  st_as_sfc() %>%st_transform(4326)
 osm = osmdata::opq(bb_basin) %>% 
   add_osm_feature(key = 'building') %>% osmdata_sf()
 buildings = osm$osm_polygons %>%st_transform(crs(basin)) %>%
