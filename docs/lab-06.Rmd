@@ -1,0 +1,66 @@
+---
+title: "Geography 176A"
+author: "[Zhongchang Yao](https://github.com/ZhongchangYao)"
+subtitle: 'Lab 6 Flood Risk in Mission Creek: Past, Present, Future'
+output:
+  html_document:
+    theme: journal
+---
+
+```{R,message=FALSE,warning=FALSE}
+library(sf)        # vector manipulation
+library(raster)    # raster manipulation
+library(fasterize) # "faster" raster
+library(whitebox)  # terrain analysis
+
+# Data libraries
+library(osmdata)   # OSM API
+library(elevatr)   # Elevation  Web Tiles
+
+library(tidyverse)
+library(units)
+library(knitr)
+```
+
+
+#Question1
+
+```{R,message=FALSE,warning=FALSE}
+
+basin  = read_sf("https://labs.waterdata.usgs.gov/api/nldi/linked-data/nwissite/USGS-11119750/basin/")
+write_sf(basin, dsn = "../data/USGS-11119750.gpkg")
+elev  = elevatr::get_elev_raster(basin, z = 13, units = "feet") %>% crop(basin) %>%mask(basin)
+writeRaster(elev, "../data/basin-elev.tif", overwrite = TRUE)
+elev_raster = raster("../data/basin-elev.tif")
+```
+
+```{R,message=FALSE,warning=FALSE,echo = FALSE}
+bb_basin = st_bbox(basin) %>%
+  st_as_sfc() %>%
+  st_transform(4326)
+osm = osmdata::opq(bb_basin) %>% 
+  add_osm_feature(key = 'building') %>% osmdata_sf()
+buildings = osm$osm_polygons %>%st_transform(crs(basin)) %>%
+  st_intersection((basin)) %>%st_centroid()
+railway = buildings %>% 
+  dplyr::filter(amenity == "railway")
+osm3 = osmdata::opq(bb_basin) %>% 
+  add_osm_feature(key = 'waterway', value = "stream") %>%
+  osmdata_sf() 
+    
+stream = osm3$osm_lines
+stream = stream %>%st_transform(crs(basin)) %>%
+  st_intersection(basin)
+```
+
+
+#Question 2
+```{R,message=FALSE,warning=FALSE}
+wbt_hillshade("../data/basin-elev.tif", "../data/basin-hillshade.tif")
+hill_r = raster("../data/basin-hillshade.tif")
+plot(hill_r, axes = FALSE, box = FALSE, col = gray.colors(256, alpha = 0.5), main = "Hillshade")
+plot(stream, add = TRUE, col = "blue")
+```
+
+
+
