@@ -1,0 +1,186 @@
+---
+title: "Geography 176A"
+author: "[Zhongchang Yao](https://github.com/ZhongchangYao)"
+subtitle: 'Lab 5 Rasters & Remote Sensing'
+output:
+  html_document:
+    theme: journal
+---
+
+```{R, message=FALSE,warning=FALSE}
+library(tidyverse)
+library(sf)
+library(readr)
+
+library(getlandsat)
+library(mapview)
+library(osmdata)
+library(getlandsat)
+library(knitr)
+library(raster)
+```
+
+#Question 1
+```{R, message = FALSE}
+bb = read_csv('../data/uscities.csv')%>%
+  filter(city == "Palo")%>%
+  st_as_sf(coords = c("lng","lat"),crs=4326)%>%
+  st_transform(5070)%>%
+  st_buffer(5000)%>%
+  st_bbox()%>%
+  st_as_sfc()%>%
+  st_as_sf()
+```
+
+#Question 2
+```{R, message=FALSE, warning=FALSE}
+bbwgs = bb %>% st_transform(4326)
+bb = st_bbox(bbwgs)
+
+scene=lsat_scenes() %>%
+  filter(min_lat<= bb$ymin, max_lat >= bb$ymax) %>%
+  filter(min_lon<= bb$xmin, max_lon >= bb$xmax) %>%
+  filter(as.Date(acquisitionDate) == as.Date("2016-09-26"))
+
+write.csv(scene,file="../data/palo-flood.csv",row.names = FALSE)
+
+
+meta = read_csv("../data/palo-flood.csv")
+
+files = lsat_scene_files(meta$download_url) %>% 
+  filter(grepl(paste0("B",1:6,".TIF$",collapse = "|"),file)) %>% 
+  arrange(file) %>% 
+  pull(file)
+
+st = sapply(files, lsat_image)
+
+s = stack(st) %>% setNames(c(paste0("band", 1:6)))
+
+cropper = bbwgs %>% st_transform(crs(s))
+
+r = crop(s, cropper)
+
+#The dimensions of the stack is 7811 and 7681. The crs is WGS84. The resolution is 30 and 30.
+#The dimensions of the crop is 340 and 346. The crs is WGS84. The resolution is  30 and 30.
+```
+
+
+#Question3
+```{R, message = FALSE}
+coastal = r$band1
+blue = r$band2
+green = r$band3
+red = r$band4
+nir = r$band5
+swir = r$band6
+
+par(mfrow = c(1,2))
+
+#Natural Color
+plotRGB(r,r = 4,g = 3,b = 2)
+#color infrared
+plotRGB(r,r = 5,g = 4,b = 3)
+#False color water focus
+plotRGB(r,r = 5,g = 6,b = 4)
+#Own Choice
+plotRGB(r,r = 6,g = 5,b = 2)
+
+#Hist/lin
+plotRGB(r,r = 4,g = 3,b = 2,stretch = "hist")
+plotRGB(r,r = 5,g = 4,b = 3,stretch = "lin")
+plotRGB(r,r = 5,g = 6,b = 4,stretch = "hist")
+plotRGB(r,r = 6,g = 5,b = 2,stretch = "lin")
+
+#Different color stretch determines the demonstration of the values in the map. The emphasis and foucs might be various.
+```
+
+
+#Question4
+```{R,message=FALSE,warning=FALSE}
+ndvi = (nir - red)/(nir + red)
+ndwi =(green - nir)/(green + nir)
+mndwi = (green - swir)/(green + swir)
+wri = (green + red)/(nir + swir)
+swi = 1/sqrt(blue - swir)
+
+stack_5 = stack(ndvi, ndwi, mndwi, wri, swi) %>%
+  setNames(c("NDVI", "NDWI", "MNDWI", "WRI", "SWI"))
+
+plot(stack_5, col = colorRampPalette(c("blue", "white", "red"))(256))
+
+#All the images, except the SWI, show the skeleton of the city area and the river areas. All of them demonstrate the relationship between land area and the water area, but they use different representations of colors. THe NDVI and NDWI have multiple colors to show different areas, and MNDWI and WRI both have roughly two colors to show land and water area. The SWI only have blue color to show the water area.
+
+#4.2
+thresholding1= function(x){ifelse(x <= 0,1,NA)}
+thresholding2= function(x){ifelse(x >= 0,1,NA)} 
+thresholding3= function(x){ifelse(x >= 0,1,NA)} 
+thresholding4= function(x){ifelse(x >= 1,1,NA)}
+thresholding5= function(x){ifelse(x <= 5,1,NA)}
+
+
+flood1= calc(ndvi,thresholding1)
+flood2= calc(ndwi,thresholding2) 
+flood3= calc(mndwi,thresholding3)
+flood4= calc(wri,thresholding4)
+flood5= calc(swi,thresholding5)
+
+flood_stack = stack(flood1, flood2, flood3, flood4, flood5) %>%
+setNames(c("NDVI", "NDWI", "MNDWI", "WRI", "SWI"))
+plot(flood_stack, col = 
+       colorRampPalette(c("white","blue"))(256))
+```
+
+#Question5
+```{R, message=FALSE,warning=FALSE}
+set.seed(2020)
+
+values <- getValues(r)
+dim(values)
+values = na.omit(values)
+# The results show the matrix of 117640 by 6. Each row contains the data for a cell.
+
+kmeans = kmeans(values, 12, iter.max = 100)
+
+kmeans_r = stack_5$NDVI
+values(kmeans_r) = kmeans$cluster
+
+plot(kmeans_r)
+
+#5.3
+values2 = values(flood2)
+table(values2, values(kmeans_r))
+
+
+valuemax = which.max(table1[2,])
+
+
+thresh = function(x) {ifelse(x == valuemax, 0, 1)}
+flood = calc(kmeans_r, thresh) 
+
+newflood = addLayer( flood_stack, flood)
+names(newflood)[6] = "K Means"
+
+plot(newflood, col = 
+       colorRampPalette(c("white","blue"))(256))
+```
+
+
+
+#Question6
+```{R, message=FALSE,warning=FALSE}
+kabletable = cellStats(flood_stack, sum)
+knitr::kable(kabletable, caption = "Flooded Cells", col.names = c("Cells"))
+kabletable_m =kabletable * 900
+knitr::kable(kabletable_m, caption = "Area of Flooded Cells (meters squared)", col.names = c("Flooded Area"))
+
+
+p_1 =calc(flood_stack, function(x){sum(x)})
+
+plot(p_1,col = blues9) 
+
+```
+
+
+
+
+
