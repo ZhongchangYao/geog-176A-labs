@@ -61,4 +61,28 @@ plot(stream, add = TRUE, col = "blue")
 ```
 
 
+#Question2
+```{R,message=FALSE,warning=FALSE,echo=FALSE}
+stream_raster = stream %>%
+  st_transform(5070) %>%
+  st_buffer(10) %>%
+  st_transform(crs(elev_raster))
+stream_raster = fasterize::fasterize(stream_raster, elev_raster)
+writeRaster(stream_raster, "../data/stream_elev.tif", overwrite = TRUE)
+stream_raster = raster("../data/stream_elev.tif")
+wbt_breach_depressions("../data/basin-elev.tif", "../data/corrected-surface.tif")
+wbt_elevation_above_stream("../data/corrected-surface.tif", "../data/stream_elev.tif", "../data/HAND.tif" )
+HAND = raster("../data/HAND.tif" ) 
+HAND = HAND + 3.69
+stream_raster = raster("../data/stream_elev.tif")
+HAND[stream_raster == 1] = 0
+writeRaster(HAND, "../data/HAND_offset.tif", overwrite = TRUE)
+HAND_offset = raster("../data/HAND_offset.tif")
+HAND_offset[HAND_offset > 10.02] = NA
+```
 
+```{R,message=FALSE,warning=FALSE}
+plot(hill_r, axes = FALSE, box = FALSE, col = gray.colors(256, alpha = 0.5), legend = FALSE)
+plot(HAND_offset, add = TRUE, col = rev(blues9))
+plot(railway, add = TRUE, col = "green", cex = 1, pch = 16)
+```
