@@ -7,7 +7,7 @@ output:
     theme: journal
 ---
 
-```{R}
+```{R,message=FALSE,warning=FALSE}
 library(tidyverse)
 library(sf)
 library(units)
@@ -23,7 +23,7 @@ library(readxl)
 ```
 
 
-```{R}
+```{R,message=FALSE,warning=FALSE}
 #Question1
 #1.1
 conus = USAboundaries::us_counties(resolution = "low") %>%
@@ -84,7 +84,7 @@ coun_plot = plot_tess(conus, "US Counties")
 ```
 
 
-```{R}
+```{R,message=FALSE,warning=FALSE}
 #Question 2
 
 #2.1
@@ -134,7 +134,7 @@ knitr::kable(tess_summary, caption = "US County", col.names = c("tesselation","f
 
 
 #Question3
-```{R}
+```{R,message=FALSE,warning=FALSE}
 #3.1
 dam = read_excel("../data/NID2019_U.xlsx")
 
@@ -195,7 +195,7 @@ plot(damplot_coun)
 
 
 #Question4
-```{R}
+```{R,message=FALSE,warning=FALSE}
 #4
 nid_classifier = data.frame(abbr = c('I','H','C','N','S','R','P','F','D','T','G','O'),
                             purpose = c('Irrigation','Hydroelectric','Flood Control','Navigation','Water Supply','Recreation','Fire Protection','Fish and Wildlife','Debris Control','Tailings','Grade Stabilization','Other'))

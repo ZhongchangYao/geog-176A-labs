@@ -8,7 +8,7 @@ output:
 ---
 
 #Question 1
-```{R, warning = FALSE}
+```{R,message=FALSE,warning=FALSE}
 library(tidyverse)
 library(knitr)
 library(readxl)
@@ -29,7 +29,7 @@ newdata = inner_join(pop, covid, by = 'fips')%>%
 ```
 
 cumulative cases in the 5 worst counties
-```{R, warning = FALSE}
+```{R,message=FALSE,warning=FALSE}
 worst = newdata%>%
   group_by(county)%>%
   summarise(cases = sum(cases, na.rm = TRUE))%>%
@@ -41,7 +41,7 @@ knitr::kable(worst, caption = paste(state1, 'counties with most cumulative cases
 ```
 
 5 counties with most new cases
-```{R, warning = FALSE}
+```{R,message=FALSE,warning=FALSE}
 newcases = newdata%>%
   select(county, new_cases)%>%
   group_by(county)%>%
@@ -66,7 +66,7 @@ day14 = newdata%>%
 
 
 #Question 2
-```{R, warning = FALSE}
+```{R,message=FALSE,warning=FALSE}
 fourstate = covid%>%
   group_by(state, date)%>%
   summarise(cases = sum(cases))%>%
@@ -78,7 +78,7 @@ fourstate = covid%>%
   mutate(avg = rollmean(newcases,7,fill=NA,allign='right'))
 ```
 
-```{R, warning = FALSE}
+```{R,message=FALSE,warning=FALSE}
 ggplot(data = fourstate, aes(x = date))+
   geom_col(aes(y = cases))+
   facet_wrap(~state)+
